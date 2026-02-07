@@ -34,7 +34,7 @@ function App() {
 
   return (
     <div className="container">
-      <h1>AlgoArena Compiler</h1>
+      <h1>CodeCorps</h1>
 
       <div className="compiler-wrapper">
         <div className="input-section">

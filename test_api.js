@@ -1,4 +1,4 @@
-const axios = require('axios');
+const axios = require('axios'); // for checking if the server works or not
 
 // The Code we want to send to the server
 const payload = {
