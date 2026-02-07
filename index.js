@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors'); // Middleware to handle Cross-Origin Resource Sharing
 const { generateFile } = require('./compiler/generateFile');
 const { executeCpp } = require('./compiler/executeCpp');
-
+const { generateInputFile } = require('./compiler/generateInputFile');
 const app = express();
 
 // 1. Middleware
@@ -14,28 +14,26 @@ app.use(cors());
 
 // 2. The Main Route
 // Endpoint: POST /run
-app.post('/run', async (req, res) => {
-    // Extract the data from the request body
-    const { language = 'cpp', code } = req.body;
+app.post("/run", async (req, res) => {
+    // 1. Get code AND input from the user
+    const { language = "cpp", code, input } = req.body;
 
-    // Validation: Did the user actually send code?
-    if (code === undefined) {
+    if (!code) {
         return res.status(400).json({ success: false, error: "Empty code body!" });
     }
 
     try {
-        // Step A: Generate the File
-        const filePath = await generateFile(language, code);
-        
-        // Step B: Run the File
-        const output = await executeCpp(filePath);
+        // 2. Generate the C++ File
+        const filepath = await generateFile(language, code);
 
-        // Step C: Send the response back to the user
-        // We return 200 OK because the "execution" succeeded (even if the code output is wrong)
-        return res.json({ filePath, output });
+        // 3. Generate the Input File (even if empty, we create an empty file)
+        const inputPath = await generateInputFile(input || "");
 
+        // 4. Run with Docker (passing both paths)
+        const output = await executeCpp(filepath, inputPath);
+
+        res.json({ filepath, output });
     } catch (err) {
-        // If compilation fails, we send a 500 error
         res.status(500).json({ err });
     }
 });
