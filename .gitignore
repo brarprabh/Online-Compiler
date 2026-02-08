@@ -36,3 +36,8 @@ Thumbs.db
 # Temporary Compiler Files (We don't want to save every test run!)
 compiler/codes/
 compiler/outputs/
+compiler/codes/*.cpp
+compiler/outputs/*.txt
+compiler/inputs/*.txt
+*.exe
+*.out
