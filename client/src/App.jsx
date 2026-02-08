@@ -4,22 +4,29 @@ import "./App.css";
 
 function App() {
   const [code, setCode] = useState("");
-  const [input, setInput] = useState(""); // New State for Input
+  const [input, setInput] = useState("");
+  const [expectedOutput, setExpectedOutput] = useState(""); // New State
   const [output, setOutput] = useState("");
+  const [verdict, setVerdict] = useState(null); // New State for Verdict
 
   const handleSubmit = async () => {
     const payload = {
       language: "cpp",
       code,
-      input, // Send the input to the backend
+      input,
+      expectedOutput, // Send this to backend
     };
 
     try {
+      setVerdict(null); // Reset verdict before running
+      setOutput("Executing...");
+
       const { data } = await axios.post("http://localhost:5000/run", payload);
+
       setOutput(data.output);
+      setVerdict(data.verdict); // Set the result (Accepted/Wrong Answer)
     } catch (err) {
       console.log(err.response);
-      // If there is an error (compilation failed), show it!
       if (
         err.response &&
         err.response.data.err &&
@@ -30,6 +37,13 @@ function App() {
         setOutput("Error connecting to server!");
       }
     }
+  };
+
+  // Helper to color the Verdict
+  const getVerdictColor = () => {
+    if (verdict === "Accepted") return "green";
+    if (verdict === "Wrong Answer") return "red";
+    return "gray";
   };
 
   return (
@@ -47,21 +61,41 @@ function App() {
             placeholder="// Write your C++ code here"
           ></textarea>
 
-          <br />
-
-          <h3>Input (stdin)</h3>
-          <textarea
-            rows="5"
-            cols="75"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Enter input here (e.g., 10 20)"
-          ></textarea>
+          <div className="io-container">
+            <div>
+              <h3>Input (stdin)</h3>
+              <textarea
+                rows="5"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="10 20"
+              ></textarea>
+            </div>
+            <div>
+              <h3>Expected Output</h3>
+              <textarea
+                rows="5"
+                value={expectedOutput}
+                onChange={(e) => setExpectedOutput(e.target.value)}
+                placeholder="30"
+              ></textarea>
+            </div>
+          </div>
         </div>
 
         <div className="output-section">
           <h3>Output</h3>
           <p>{output}</p>
+
+          {/* Show Verdict only if it exists */}
+          {verdict && (
+            <div
+              className="verdict-box"
+              style={{ backgroundColor: getVerdictColor() }}
+            >
+              {verdict}
+            </div>
+          )}
         </div>
       </div>
 

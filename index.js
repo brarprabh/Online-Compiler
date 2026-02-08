@@ -15,24 +15,37 @@ app.use(cors());
 // 2. The Main Route
 // Endpoint: POST /run
 app.post("/run", async (req, res) => {
-    // 1. Get code AND input from the user
-    const { language = "cpp", code, input } = req.body;
+    // 1. Extract 'expectedOutput' from the request
+    const { language = "cpp", code, input, expectedOutput } = req.body;
 
     if (!code) {
         return res.status(400).json({ success: false, error: "Empty code body!" });
     }
 
     try {
-        // 2. Generate the C++ File
         const filepath = await generateFile(language, code);
+        const inputPath = await generateInputFile(input); 
 
-        // 3. Generate the Input File (even if empty, we create an empty file)
-        const inputPath = await generateInputFile(input || "");
+        // 2. Run the Code
+        const output = await executeCpp(filepath, inputPath); 
 
-        // 4. Run with Docker (passing both paths)
-        const output = await executeCpp(filepath, inputPath);
+        // 3. The Judge Logic (Verdict)
+        let verdict = null;
+        if (expectedOutput) {
+            // "Normalize" the strings: Remove extra spaces and newlines
+            const cleanOutput = output.trim().replace(/\r\n/g, "\n"); 
+            const cleanExpected = expectedOutput.trim().replace(/\r\n/g, "\n");
 
-        res.json({ filepath, output });
+            if (cleanOutput === cleanExpected) {
+                verdict = "Accepted"; // ✅
+            } else {
+                verdict = "Wrong Answer"; // ❌
+            }
+        }
+
+        // 4. Return Output + Verdict
+        res.json({ output, verdict });
+
     } catch (err) {
         res.status(500).json({ err });
     }
