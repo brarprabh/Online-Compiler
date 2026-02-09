@@ -3,6 +3,12 @@ const cors = require('cors'); // Middleware to handle Cross-Origin Resource Shar
 const { generateFile } = require('./compiler/generateFile');
 const { executeCpp } = require('./compiler/executeCpp');
 const { generateInputFile } = require('./compiler/generateInputFile');
+
+const dotenv = require("dotenv");
+const connectDB = require("./database"); // Import connection logic
+const Problem = require("./models/problem"); // Import the Model
+dotenv.config(); // Load environment variables
+connectDB();
 const app = express();
 
 // 1. Middleware
@@ -11,6 +17,28 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cors());
+
+// GET Route to fetch all problems
+app.get('/problems', async (req, res) => {
+    try {
+        // Fetch all problems from Mongo, but only return title, difficulty, and id
+        const problems = await Problem.find(); 
+        res.json(problems);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET Route to fetch a single problem (including test cases)
+app.get('/problems/:id', async (req, res) => {
+    try {
+        const problem = await Problem.findById(req.params.id);
+        if (!problem) return res.status(404).json({ error: "Problem not found" });
+        res.json(problem);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // 2. The Main Route
 // Endpoint: POST /run

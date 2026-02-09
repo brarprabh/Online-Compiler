@@ -1,21 +1,28 @@
 import axios from "axios";
-import React, { useState } from "react";
-import { problems } from "./problem";
-import {
-  Play,
-  Terminal,
-  Code,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-} from "lucide-react"; // Install: npm install lucide-react
+import React, { useState, useEffect } from "react"; // Added useEffect
+import { Play, Terminal, Code, CheckCircle, XCircle } from "lucide-react";
 
 function App() {
   const [code, setCode] = useState("");
-  const [selectedProblem, setSelectedProblem] = useState(problems[0]);
+  const [problems, setProblems] = useState([]); // Store fetched problems
+  const [selectedProblem, setSelectedProblem] = useState(null); // Allow null initially
   const [testResults, setTestResults] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [activeTab, setActiveTab] = useState("output"); // 'output' or 'testcases'
+  const [activeTab, setActiveTab] = useState("output");
+
+  // 1. Fetch Problems from Backend on Load
+  useEffect(() => {
+    const fetchProblems = async () => {
+      try {
+        const { data } = await axios.get("http://localhost:5000/problems");
+        setProblems(data);
+        if (data.length > 0) setSelectedProblem(data[0]); // Select first problem automatically
+      } catch (err) {
+        console.error("Failed to fetch problems:", err);
+      }
+    };
+    fetchProblems();
+  }, []);
 
   const runTestCase = async (testCase) => {
     try {
@@ -39,6 +46,7 @@ function App() {
   };
 
   const handleRun = async () => {
+    if (!selectedProblem) return;
     setIsRunning(true);
     setTestResults([]);
     const results = [];
@@ -53,9 +61,18 @@ function App() {
     setActiveTab("output");
   };
 
+  // Render Loading State if no problems yet
+  if (!selectedProblem) {
+    return (
+      <div className="h-screen bg-vs-bg text-white flex items-center justify-center">
+        Loading Problems...
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen bg-vs-bg text-vs-text font-sans overflow-hidden">
-      {/* 1. HEADER */}
+      {/* HEADER */}
       <header className="h-12 bg-vs-sidebar border-b border-vs-border flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-2 font-bold text-lg tracking-tight">
           <Code className="text-vs-accent w-5 h-5" />
@@ -75,7 +92,7 @@ function App() {
         </button>
       </header>
 
-      {/* 2. MAIN WORKSPACE (Split View) */}
+      {/* MAIN WORKSPACE */}
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT PANEL: Problem Description */}
         <div className="w-1/3 bg-vs-bg border-r border-vs-border flex flex-col">
@@ -85,17 +102,16 @@ function App() {
             </label>
             <select
               className="w-full bg-[#3c3c3c] text-white border border-vs-border rounded p-2 text-sm outline-none focus:border-vs-accent"
+              value={selectedProblem._id}
               onChange={(e) => {
-                const problem = problems.find(
-                  (p) => p.id === parseInt(e.target.value),
-                );
+                const problem = problems.find((p) => p._id === e.target.value);
                 setSelectedProblem(problem);
                 setTestResults([]);
               }}
             >
               {problems.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.id}. {p.title}
+                <option key={p._id} value={p._id}>
+                  {p.title}
                 </option>
               ))}
             </select>
@@ -105,32 +121,40 @@ function App() {
             <h1 className="text-2xl font-bold text-white mb-4">
               {selectedProblem.title}
             </h1>
+            <div className="flex gap-2 mb-4">
+              <span
+                className={`text-xs px-2 py-1 rounded bg-gray-700 text-${selectedProblem.difficulty === "Easy" ? "green" : "yellow"}-400`}
+              >
+                {selectedProblem.difficulty}
+              </span>
+            </div>
             <div className="prose prose-invert prose-sm max-w-none text-gray-300">
               <p className="mb-4 leading-relaxed">
                 {selectedProblem.description}
               </p>
 
-              <div className="bg-[#2d2d2d] rounded-md p-4 mb-4 border border-vs-border">
-                <span className="text-xs text-vs-muted font-mono block mb-1">
-                  Example Input:
-                </span>
-                <code className="font-mono text-sm text-green-400 block mb-3">
-                  {selectedProblem.testCases[0].input}
-                </code>
-                <span className="text-xs text-vs-muted font-mono block mb-1">
-                  Expected Output:
-                </span>
-                <code className="font-mono text-sm text-blue-400 block">
-                  {selectedProblem.testCases[0].output}
-                </code>
-              </div>
+              {selectedProblem.testCases.length > 0 && (
+                <div className="bg-[#2d2d2d] rounded-md p-4 mb-4 border border-vs-border">
+                  <span className="text-xs text-vs-muted font-mono block mb-1">
+                    Example Input:
+                  </span>
+                  <code className="font-mono text-sm text-green-400 block mb-3">
+                    {selectedProblem.testCases[0].input}
+                  </code>
+                  <span className="text-xs text-vs-muted font-mono block mb-1">
+                    Expected Output:
+                  </span>
+                  <code className="font-mono text-sm text-blue-400 block">
+                    {selectedProblem.testCases[0].output}
+                  </code>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* RIGHT PANEL: Editor & Terminal */}
         <div className="w-2/3 flex flex-col">
-          {/* Editor Area */}
           <div className="flex-1 flex flex-col min-h-0">
             <div className="h-9 bg-vs-sidebar border-b border-vs-border flex items-center px-4 text-xs text-vs-muted select-none">
               <span className="flex items-center gap-2 bg-vs-bg px-3 py-1.5 border-t-2 border-vs-accent text-white rounded-t-sm">
@@ -146,7 +170,6 @@ function App() {
             ></textarea>
           </div>
 
-          {/* Terminal / Output Area */}
           <div className="h-64 bg-[#181818] border-t border-vs-border flex flex-col">
             <div className="h-9 bg-vs-sidebar border-b border-vs-border flex items-center px-2 gap-4">
               <button
