@@ -114,6 +114,18 @@ app.post('/submit', async (req, res) => {
     }
 });
 
+// GET Route: Fetch submissions for a specific problem
+app.get('/submissions/:problemId', async (req, res) => {
+  try {
+    const { problemId } = req.params;
+    // Find submissions -> Sort by newest first (-1)
+    const submissions = await Submission.find({ problemId }).sort({ submittedAt: -1 });
+    res.json(submissions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 3. Start the Server
 app.listen(5000, () => {
     console.log('Listening on port 5000!');

@@ -1,14 +1,24 @@
 import axios from "axios";
 import React, { useState, useEffect } from "react";
-import { Play, Terminal, Code, CheckCircle, XCircle, Save } from "lucide-react"; // Added Save icon
+import {
+  Play,
+  Terminal,
+  Code,
+  CheckCircle,
+  XCircle,
+  Save,
+  Clock,
+  History,
+} from "lucide-react"; // Added icons
 
 function App() {
   const [code, setCode] = useState("");
   const [problems, setProblems] = useState([]);
   const [selectedProblem, setSelectedProblem] = useState(null);
   const [testResults, setTestResults] = useState([]);
+  const [submissions, setSubmissions] = useState([]); // Store history
   const [isRunning, setIsRunning] = useState(false);
-  const [activeTab, setActiveTab] = useState("output");
+  const [activeTab, setActiveTab] = useState("output"); // 'output' or 'history'
 
   useEffect(() => {
     const fetchProblems = async () => {
@@ -22,6 +32,23 @@ function App() {
     };
     fetchProblems();
   }, []);
+
+  // Fetch submissions whenever the user selects a problem OR clicks the tab
+  useEffect(() => {
+    if (selectedProblem && activeTab === "history") {
+      const fetchHistory = async () => {
+        try {
+          const { data } = await axios.get(
+            `http://localhost:5000/submissions/${selectedProblem._id}`,
+          );
+          setSubmissions(data);
+        } catch (err) {
+          console.error("Failed to fetch history:", err);
+        }
+      };
+      fetchHistory();
+    }
+  }, [selectedProblem, activeTab]);
 
   const runTestCase = async (testCase) => {
     try {
@@ -46,9 +73,9 @@ function App() {
   const executeCode = async () => {
     setIsRunning(true);
     setTestResults([]);
+    setActiveTab("output"); // Force switch to output to see progress
     const results = [];
 
-    // Run against ALL test cases
     for (const testCase of selectedProblem.testCases) {
       const result = await runTestCase(testCase);
       results.push(result);
@@ -56,21 +83,15 @@ function App() {
 
     setTestResults(results);
     setIsRunning(false);
-    setActiveTab("output");
-    return results; // Return results so handleSubmit can use them
+    return results;
   };
 
   const handleSubmit = async () => {
     if (!selectedProblem) return;
-
-    // 1. Run the code first to check correctness
     const results = await executeCode();
-
-    // 2. Determine if passed (Every test case must be "Accepted")
     const isSuccess = results.every((r) => r.verdict === "Accepted");
     const verdict = isSuccess ? "Accepted" : "Wrong Answer";
 
-    // 3. Save to Database
     try {
       await axios.post("http://localhost:5000/submit", {
         problemId: selectedProblem._id,
@@ -79,13 +100,16 @@ function App() {
         verdict,
       });
 
-      if (isSuccess) {
-        alert("🎉 Accepted! Submission Saved.");
-      } else {
-        alert("❌ Wrong Answer. Keep trying!");
-      }
+      // Auto-switch to history tab to show the new submission
+      setActiveTab("history");
+      // Re-fetch history immediately
+      const { data } = await axios.get(
+        `http://localhost:5000/submissions/${selectedProblem._id}`,
+      );
+      setSubmissions(data);
+
+      alert(isSuccess ? "🎉 Accepted!" : "❌ Wrong Answer");
     } catch (err) {
-      console.error("Submission failed:", err);
       alert("Error saving submission.");
     }
   };
@@ -108,26 +132,20 @@ function App() {
             Code<span className="text-vs-accent">Corps</span>
           </span>
         </div>
-
         <div className="flex gap-3">
           <button
             onClick={executeCode}
             disabled={isRunning}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded text-sm font-semibold transition-all
-                ${isRunning ? "bg-gray-600 cursor-not-allowed" : "bg-gray-700 hover:bg-gray-600 text-white"}`}
+            className="flex items-center gap-2 px-4 py-1.5 rounded text-sm font-semibold bg-gray-700 hover:bg-gray-600 text-white"
           >
-            <Play size={14} />
-            Run
+            <Play size={14} /> Run
           </button>
-
           <button
             onClick={handleSubmit}
             disabled={isRunning}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded text-sm font-semibold transition-all
-                ${isRunning ? "bg-gray-600 cursor-not-allowed" : "bg-green-700 hover:bg-green-600 text-white"}`}
+            className="flex items-center gap-2 px-4 py-1.5 rounded text-sm font-semibold bg-green-700 hover:bg-green-600 text-white"
           >
-            <Save size={14} />
-            Submit
+            <Save size={14} /> Submit
           </button>
         </div>
       </header>
@@ -138,13 +156,14 @@ function App() {
         <div className="w-1/3 bg-vs-bg border-r border-vs-border flex flex-col">
           <div className="p-4 border-b border-vs-border bg-vs-sidebar">
             <select
-              className="w-full bg-[#3c3c3c] text-white border border-vs-border rounded p-2 text-sm outline-none focus:border-vs-accent"
+              className="w-full bg-[#3c3c3c] text-white border border-vs-border rounded p-2 text-sm outline-none"
               value={selectedProblem._id}
               onChange={(e) => {
-                const problem = problems.find((p) => p._id === e.target.value);
-                setSelectedProblem(problem);
+                setSelectedProblem(
+                  problems.find((p) => p._id === e.target.value),
+                );
                 setTestResults([]);
-                setCode(""); // Optional: Clear code on switch
+                setCode("");
               }}
             >
               {problems.map((p) => (
@@ -169,22 +188,6 @@ function App() {
             <p className="text-gray-300 leading-relaxed mb-4">
               {selectedProblem.description}
             </p>
-            {selectedProblem.testCases.length > 0 && (
-              <div className="bg-[#2d2d2d] rounded p-4 border border-vs-border font-mono text-sm">
-                <div className="mb-2">
-                  <span className="text-gray-500">Input:</span>
-                  <div className="text-white mt-1">
-                    {selectedProblem.testCases[0].input}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-500">Output:</span>
-                  <div className="text-white mt-1">
-                    {selectedProblem.testCases[0].output}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -201,34 +204,84 @@ function App() {
           </div>
 
           <div className="h-64 bg-[#181818] border-t border-vs-border flex flex-col">
-            <div className="h-9 bg-vs-sidebar border-b border-vs-border flex items-center px-4">
-              <span className="text-xs text-vs-muted uppercase tracking-wide font-semibold flex items-center gap-2">
-                <Terminal size={12} /> Test Results
-              </span>
+            {/* TABS */}
+            <div className="h-9 bg-vs-sidebar border-b border-vs-border flex items-center px-2 gap-2">
+              <button
+                onClick={() => setActiveTab("output")}
+                className={`text-xs px-3 py-1 flex items-center gap-2 uppercase tracking-wide font-semibold ${activeTab === "output" ? "text-white border-b-2 border-vs-accent" : "text-vs-muted"}`}
+              >
+                <Terminal size={12} /> Output
+              </button>
+              <button
+                onClick={() => setActiveTab("history")}
+                className={`text-xs px-3 py-1 flex items-center gap-2 uppercase tracking-wide font-semibold ${activeTab === "history" ? "text-white border-b-2 border-vs-accent" : "text-vs-muted"}`}
+              >
+                <History size={12} /> Submissions
+              </button>
             </div>
 
+            {/* TAB CONTENT */}
             <div className="flex-1 p-4 overflow-y-auto font-mono text-sm">
-              {testResults.map((res, index) => (
-                <div
-                  key={index}
-                  className="mb-2 p-2 rounded bg-vs-sidebar border border-vs-border flex items-center gap-3"
-                >
-                  {res.verdict === "Accepted" ? (
-                    <CheckCircle size={16} className="text-green-500" />
-                  ) : (
-                    <XCircle size={16} className="text-red-500" />
-                  )}
-                  <span
-                    className={
-                      res.verdict === "Accepted"
-                        ? "text-green-500"
-                        : "text-red-500"
-                    }
-                  >
-                    Case {index + 1}: {res.verdict}
-                  </span>
+              {activeTab === "output" ? (
+                // OUTPUT VIEW
+                testResults.length === 0 ? (
+                  <div className="text-vs-muted opacity-50">
+                    Run code to see output...
+                  </div>
+                ) : (
+                  testResults.map((res, index) => (
+                    <div
+                      key={index}
+                      className="mb-2 p-2 rounded bg-vs-sidebar border border-vs-border flex items-center gap-3"
+                    >
+                      {res.verdict === "Accepted" ? (
+                        <CheckCircle size={16} className="text-green-500" />
+                      ) : (
+                        <XCircle size={16} className="text-red-500" />
+                      )}
+                      <span
+                        className={
+                          res.verdict === "Accepted"
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }
+                      >
+                        Case {index + 1}: {res.verdict}
+                      </span>
+                    </div>
+                  ))
+                )
+              ) : // HISTORY VIEW
+              submissions.length === 0 ? (
+                <div className="text-vs-muted opacity-50">
+                  No submissions yet.
                 </div>
-              ))}
+              ) : (
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="text-vs-muted border-b border-vs-border">
+                      <th className="pb-2">Verdict</th>
+                      <th className="pb-2">Date</th>
+                      <th className="pb-2">Language</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {submissions.map((sub, i) => (
+                      <tr key={i} className="border-b border-vs-border/50">
+                        <td
+                          className={`py-2 font-bold ${sub.verdict === "Accepted" ? "text-green-500" : "text-red-500"}`}
+                        >
+                          {sub.verdict}
+                        </td>
+                        <td className="py-2 text-gray-400">
+                          {new Date(sub.submittedAt).toLocaleString()}
+                        </td>
+                        <td className="py-2 text-blue-400">{sub.language}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
