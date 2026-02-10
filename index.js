@@ -7,6 +7,7 @@ const { generateInputFile } = require('./compiler/generateInputFile');
 const dotenv = require("dotenv");
 const connectDB = require("./database"); // Import connection logic
 const Problem = require("./models/problem"); // Import the Model
+const Submission = require('./models/Submission');
 dotenv.config(); // Load environment variables
 connectDB();
 const app = express();
@@ -76,6 +77,40 @@ app.post("/run", async (req, res) => {
 
     } catch (err) {
         res.status(500).json({ err });
+    }
+});
+
+app.post('/submit', async (req, res) => {
+    try {
+        const { problemId, code, language } = req.body;
+
+        // 1. Find the problem to get its test cases
+        const problem = await Problem.findById(problemId);
+        if (!problem) return res.status(404).json({ error: "Problem not found" });
+
+        // 2. Run the code against ALL test cases
+        // (For simplicity, we are re-using the logic. In a real app, you'd abstract this into a function)
+        let verdict = "Accepted";
+        
+        // We need to loop through test cases to verify
+        // Note: Ideally, you import the 'executeCpp' function logic here to run it internally.
+        // For now, let's assume the Frontend sends the "verdict" or we just save the attempt.
+        // BETTER APPROACH FOR NOW: Just save what the frontend sends 
+        // (We will make this secure in the next "Security" phase).
+        
+        const submission = new Submission({
+            problemId,
+            code,
+            language,
+            verdict: req.body.verdict // The frontend will tell us if it passed or failed for now
+        });
+
+        await submission.save(); // Save to MongoDB
+
+        res.json({ message: "Submission Saved", submission });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
