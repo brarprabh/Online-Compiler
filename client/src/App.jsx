@@ -7,39 +7,173 @@ import {
   CheckCircle,
   XCircle,
   Save,
-  Clock,
   History,
-} from "lucide-react"; // Added icons
+  LogOut,
+  User,
+  Lock,
+  Mail,
+} from "lucide-react";
 
+// --- AUTHENTICATION COMPONENT ---
+const AuthPage = ({ onLogin }) => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [formData, setFormData] = useState({
+    username: "",
+    email: "",
+    password: "",
+  });
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    const endpoint = isLogin ? "/login" : "/register";
+
+    try {
+      const { data } = await axios.post(
+        `http://localhost:5000${endpoint}`,
+        formData,
+      );
+      localStorage.setItem("token", data.token);
+      onLogin(data.token);
+    } catch (err) {
+      setError(err.response?.data?.error || "Authentication failed");
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#1e1e1e] flex items-center justify-center text-white font-sans">
+      <div className="w-full max-w-md p-8 bg-[#252526] rounded-lg shadow-lg border border-[#3e3e42]">
+        <div className="flex justify-center mb-6">
+          <div className="flex items-center gap-2 font-bold text-2xl tracking-tight">
+            <Code className="text-blue-500 w-8 h-8" />
+            <span>
+              Code<span className="text-blue-500">Corps</span>
+            </span>
+          </div>
+        </div>
+
+        <h2 className="text-xl font-semibold mb-6 text-center">
+          {isLogin ? "Welcome Back" : "Create Account"}
+        </h2>
+
+        {error && (
+          <div className="bg-red-500/20 text-red-400 p-3 rounded mb-4 text-sm border border-red-500/50">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {!isLogin && (
+            <div className="relative">
+              <User className="absolute left-3 top-3 text-gray-500 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Username"
+                className="w-full bg-[#3c3c3c] border border-gray-600 rounded p-2.5 pl-10 focus:border-blue-500 outline-none text-white"
+                value={formData.username}
+                onChange={(e) =>
+                  setFormData({ ...formData, username: e.target.value })
+                }
+                required
+              />
+            </div>
+          )}
+          <div className="relative">
+            <Mail className="absolute left-3 top-3 text-gray-500 w-5 h-5" />
+            <input
+              type="email"
+              placeholder="Email"
+              className="w-full bg-[#3c3c3c] border border-gray-600 rounded p-2.5 pl-10 focus:border-blue-500 outline-none text-white"
+              value={formData.email}
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
+              required
+            />
+          </div>
+          <div className="relative">
+            <Lock className="absolute left-3 top-3 text-gray-500 w-5 h-5" />
+            <input
+              type="password"
+              placeholder="Password"
+              className="w-full bg-[#3c3c3c] border border-gray-600 rounded p-2.5 pl-10 focus:border-blue-500 outline-none text-white"
+              value={formData.password}
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded transition-all"
+          >
+            {isLogin ? "Log In" : "Sign Up"}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-gray-400">
+          {isLogin ? "Don't have an account? " : "Already have an account? "}
+          <button
+            onClick={() => setIsLogin(!isLogin)}
+            className="text-blue-400 hover:underline"
+          >
+            {isLogin ? "Sign Up" : "Log In"}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// --- MAIN APP COMPONENT ---
 function App() {
+  const [token, setToken] = useState(localStorage.getItem("token"));
   const [code, setCode] = useState("");
   const [problems, setProblems] = useState([]);
   const [selectedProblem, setSelectedProblem] = useState(null);
   const [testResults, setTestResults] = useState([]);
-  const [submissions, setSubmissions] = useState([]); // Store history
+  const [submissions, setSubmissions] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [activeTab, setActiveTab] = useState("output"); // 'output' or 'history'
+  const [activeTab, setActiveTab] = useState("output");
+
+  if (!token) {
+    return <AuthPage onLogin={(t) => setToken(t)} />;
+  }
+
+  const logout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+  };
 
   useEffect(() => {
     const fetchProblems = async () => {
       try {
-        const { data } = await axios.get("http://localhost:5000/problems");
+        const config = { headers: { Authorization: `Bearer ${token}` } };
+        const { data } = await axios.get(
+          "http://localhost:5000/problems",
+          config,
+        );
         setProblems(data);
         if (data.length > 0) setSelectedProblem(data[0]);
       } catch (err) {
         console.error("Failed to fetch problems:", err);
+        if (err.response?.status === 401) logout();
       }
     };
     fetchProblems();
-  }, []);
+  }, [token]);
 
-  // Fetch submissions whenever the user selects a problem OR clicks the tab
   useEffect(() => {
     if (selectedProblem && activeTab === "history") {
       const fetchHistory = async () => {
         try {
+          const config = { headers: { Authorization: `Bearer ${token}` } };
           const { data } = await axios.get(
             `http://localhost:5000/submissions/${selectedProblem._id}`,
+            config,
           );
           setSubmissions(data);
         } catch (err) {
@@ -48,7 +182,7 @@ function App() {
       };
       fetchHistory();
     }
-  }, [selectedProblem, activeTab]);
+  }, [selectedProblem, activeTab, token]);
 
   const runTestCase = async (testCase) => {
     try {
@@ -71,9 +205,10 @@ function App() {
   };
 
   const executeCode = async () => {
+    if (!selectedProblem) return;
     setIsRunning(true);
     setTestResults([]);
-    setActiveTab("output"); // Force switch to output to see progress
+    setActiveTab("output");
     const results = [];
 
     for (const testCase of selectedProblem.testCases) {
@@ -93,18 +228,22 @@ function App() {
     const verdict = isSuccess ? "Accepted" : "Wrong Answer";
 
     try {
-      await axios.post("http://localhost:5000/submit", {
-        problemId: selectedProblem._id,
-        code,
-        language: "cpp",
-        verdict,
-      });
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      await axios.post(
+        "http://localhost:5000/submit",
+        {
+          problemId: selectedProblem._id,
+          code,
+          language: "cpp",
+          verdict,
+        },
+        config,
+      );
 
-      // Auto-switch to history tab to show the new submission
       setActiveTab("history");
-      // Re-fetch history immediately
       const { data } = await axios.get(
         `http://localhost:5000/submissions/${selectedProblem._id}`,
+        config,
       );
       setSubmissions(data);
 
@@ -114,25 +253,27 @@ function App() {
     }
   };
 
+  // RENDER GUARD: Dark background ensures invisibility issues are gone
   if (!selectedProblem) {
     return (
-      <div className="h-screen bg-vs-bg text-white flex items-center justify-center">
-        Loading Problems...
+      <div className="h-screen bg-[#1e1e1e] text-white flex flex-col items-center justify-center font-mono">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
+        <p>Initializing CodeCorps...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-vs-bg text-vs-text font-sans overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#1e1e1e] text-[#cccccc] font-sans overflow-hidden">
       {/* HEADER */}
-      <header className="h-12 bg-vs-sidebar border-b border-vs-border flex items-center justify-between px-4 shrink-0">
-        <div className="flex items-center gap-2 font-bold text-lg tracking-tight">
-          <Code className="text-vs-accent w-5 h-5" />
+      <header className="h-12 bg-[#252526] border-b border-[#3e3e42] flex items-center justify-between px-4 shrink-0">
+        <div className="flex items-center gap-2 font-bold text-lg tracking-tight text-white">
+          <Code className="text-blue-500 w-5 h-5" />
           <span>
-            Code<span className="text-vs-accent">Corps</span>
+            Code<span className="text-blue-500">Corps</span>
           </span>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-center">
           <button
             onClick={executeCode}
             disabled={isRunning}
@@ -147,16 +288,22 @@ function App() {
           >
             <Save size={14} /> Submit
           </button>
+          <button
+            onClick={logout}
+            className="ml-2 text-gray-400 hover:text-white"
+            title="Logout"
+          >
+            <LogOut size={18} />
+          </button>
         </div>
       </header>
 
-      {/* MAIN WORKSPACE */}
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT PANEL */}
-        <div className="w-1/3 bg-vs-bg border-r border-vs-border flex flex-col">
-          <div className="p-4 border-b border-vs-border bg-vs-sidebar">
+        <div className="w-1/3 bg-[#1e1e1e] border-r border-[#3e3e42] flex flex-col">
+          <div className="p-4 border-b border-[#3e3e42] bg-[#252526]">
             <select
-              className="w-full bg-[#3c3c3c] text-white border border-vs-border rounded p-2 text-sm outline-none"
+              className="w-full bg-[#3c3c3c] text-white border border-[#3e3e42] rounded p-2 text-sm outline-none"
               value={selectedProblem._id}
               onChange={(e) => {
                 setSelectedProblem(
@@ -179,9 +326,7 @@ function App() {
               {selectedProblem.title}
             </h1>
             <div className="flex gap-2 mb-4">
-              <span
-                className={`text-xs px-2 py-1 rounded bg-gray-700 text-${selectedProblem.difficulty === "Easy" ? "green" : "yellow"}-400`}
-              >
+              <span className="text-xs px-2 py-1 rounded bg-gray-700 text-green-400 border border-gray-600">
                 {selectedProblem.difficulty}
               </span>
             </div>
@@ -193,9 +338,9 @@ function App() {
 
         {/* RIGHT PANEL */}
         <div className="w-2/3 flex flex-col">
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0 bg-[#1e1e1e]">
             <textarea
-              className="flex-1 bg-vs-bg p-4 font-mono text-sm text-gray-300 outline-none resize-none leading-relaxed"
+              className="flex-1 bg-[#1e1e1e] p-4 font-mono text-sm text-gray-300 outline-none resize-none leading-relaxed"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="// Write your C++ solution here..."
@@ -203,36 +348,33 @@ function App() {
             ></textarea>
           </div>
 
-          <div className="h-64 bg-[#181818] border-t border-vs-border flex flex-col">
-            {/* TABS */}
-            <div className="h-9 bg-vs-sidebar border-b border-vs-border flex items-center px-2 gap-2">
+          <div className="h-64 bg-[#181818] border-t border-[#3e3e42] flex flex-col">
+            <div className="h-9 bg-[#252526] border-b border-[#3e3e42] flex items-center px-2 gap-2">
               <button
                 onClick={() => setActiveTab("output")}
-                className={`text-xs px-3 py-1 flex items-center gap-2 uppercase tracking-wide font-semibold ${activeTab === "output" ? "text-white border-b-2 border-vs-accent" : "text-vs-muted"}`}
+                className={`text-xs px-3 py-1 flex items-center gap-2 uppercase tracking-wide font-semibold ${activeTab === "output" ? "text-white border-b-2 border-blue-500" : "text-gray-500"}`}
               >
                 <Terminal size={12} /> Output
               </button>
               <button
                 onClick={() => setActiveTab("history")}
-                className={`text-xs px-3 py-1 flex items-center gap-2 uppercase tracking-wide font-semibold ${activeTab === "history" ? "text-white border-b-2 border-vs-accent" : "text-vs-muted"}`}
+                className={`text-xs px-3 py-1 flex items-center gap-2 uppercase tracking-wide font-semibold ${activeTab === "history" ? "text-white border-b-2 border-blue-500" : "text-gray-500"}`}
               >
                 <History size={12} /> Submissions
               </button>
             </div>
 
-            {/* TAB CONTENT */}
-            <div className="flex-1 p-4 overflow-y-auto font-mono text-sm">
+            <div className="flex-1 p-4 overflow-y-auto font-mono text-sm text-[#cccccc]">
               {activeTab === "output" ? (
-                // OUTPUT VIEW
                 testResults.length === 0 ? (
-                  <div className="text-vs-muted opacity-50">
+                  <div className="text-gray-600 opacity-50 italic">
                     Run code to see output...
                   </div>
                 ) : (
-                  testResults.map((res, index) => (
+                  testResults.map((res, i) => (
                     <div
-                      key={index}
-                      className="mb-2 p-2 rounded bg-vs-sidebar border border-vs-border flex items-center gap-3"
+                      key={i}
+                      className="mb-2 p-2 rounded bg-[#252526] border border-[#3e3e42] flex items-center gap-3"
                     >
                       {res.verdict === "Accepted" ? (
                         <CheckCircle size={16} className="text-green-500" />
@@ -246,28 +388,26 @@ function App() {
                             : "text-red-500"
                         }
                       >
-                        Case {index + 1}: {res.verdict}
+                        Case {i + 1}: {res.verdict}
                       </span>
                     </div>
                   ))
                 )
-              ) : // HISTORY VIEW
-              submissions.length === 0 ? (
-                <div className="text-vs-muted opacity-50">
+              ) : submissions.length === 0 ? (
+                <div className="text-gray-600 opacity-50 italic">
                   No submissions yet.
                 </div>
               ) : (
                 <table className="w-full text-left text-xs">
                   <thead>
-                    <tr className="text-vs-muted border-b border-vs-border">
-                      <th className="pb-2">Verdict</th>
-                      <th className="pb-2">Date</th>
-                      <th className="pb-2">Language</th>
+                    <tr className="text-gray-500 border-b border-[#3e3e42]">
+                      <th className="pb-2 uppercase">Verdict</th>
+                      <th className="pb-2 uppercase">Date</th>
                     </tr>
                   </thead>
                   <tbody>
                     {submissions.map((sub, i) => (
-                      <tr key={i} className="border-b border-vs-border/50">
+                      <tr key={i} className="border-b border-[#2d2d2d]">
                         <td
                           className={`py-2 font-bold ${sub.verdict === "Accepted" ? "text-green-500" : "text-red-500"}`}
                         >
@@ -276,7 +416,6 @@ function App() {
                         <td className="py-2 text-gray-400">
                           {new Date(sub.submittedAt).toLocaleString()}
                         </td>
-                        <td className="py-2 text-blue-400">{sub.language}</td>
                       </tr>
                     ))}
                   </tbody>

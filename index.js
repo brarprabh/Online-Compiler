@@ -1,16 +1,30 @@
+const path = require('path');
+// Force Node to look for .env in the CURRENT folder (__dirname)
+const dotenv = require('dotenv');
+dotenv.config({ path: path.join(__dirname, '.env') });
+
+console.log("DEBUG: JWT_SECRET is:", process.env.JWT_SECRET);
+
 const express = require('express');
+const app = express();
+
+
+const bcrypt = require('bcryptjs'); // Encrypts passwords
+const jwt = require('jsonwebtoken'); // Creates the "passport"
+const User = require('./models/User');
+const generateToken = require('./generateToken');
+
 const cors = require('cors'); // Middleware to handle Cross-Origin Resource Sharing
 const { generateFile } = require('./compiler/generateFile');
 const { executeCpp } = require('./compiler/executeCpp');
 const { generateInputFile } = require('./compiler/generateInputFile');
 
-const dotenv = require("dotenv");
 const connectDB = require("./database"); // Import connection logic
 const Problem = require("./models/problem"); // Import the Model
 const Submission = require('./models/Submission');
-dotenv.config(); // Load environment variables
+
 connectDB();
-const app = express();
+
 
 // 1. Middleware
 // This parses incoming requests with JSON payloads (e.g., { "language": "cpp", "code": "..." })
@@ -124,6 +138,72 @@ app.get('/submissions/:problemId', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// REGISTER ROUTE
+app.post('/register', async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+
+        // 1. Check if user already exists
+        const userExists = await User.findOne({ email });
+        if (userExists) {
+            return res.status(400).json({ error: "User already exists" });
+        }
+
+        // 2. Encrypt the password (The most important step!)
+        const salt = await bcrypt.genSalt(10); // "Salt" makes the hash random/unique
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // 3. Create the user
+        const user = new User({
+            username,
+            email,
+            password: hashedPassword // Save the ENCRYPTED version, never plain text!
+        });
+
+        await user.save();
+
+        // 4. Give them a token immediately so they are logged in
+        res.status(201).json({ 
+            message: "User registered successfully",
+            token: generateToken(user._id) // <--- We need to define this function or import it
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// LOGIN ROUTE
+app.post('/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // 1. Find user by email
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ error: "Invalid email or password" });
+        }
+
+        // 2. Compare passwords
+        // bcrypt.compare(typedPassword, databaseHash)
+        const isMatch = await bcrypt.compare(password, user.password);
+        
+        if (!isMatch) {
+            return res.status(400).json({ error: "Invalid email or password" });
+        }
+
+        // 3. Send back the token
+        res.json({
+            message: "Login successful",
+            username: user.username,
+            token: generateToken(user._id)
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // 3. Start the Server
