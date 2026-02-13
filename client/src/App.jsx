@@ -12,6 +12,7 @@ import {
   User,
   Lock,
   Mail,
+  Trophy, // <-- Added Trophy icon for the Leaderboard
 } from "lucide-react";
 
 // --- AUTHENTICATION COMPONENT ---
@@ -136,6 +137,10 @@ function App() {
   const [selectedProblem, setSelectedProblem] = useState(null);
   const [testResults, setTestResults] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+
+  // NEW: State to hold the leaderboard data
+  const [leaderboard, setLeaderboard] = useState([]);
+
   const [isRunning, setIsRunning] = useState(false);
   const [activeTab, setActiveTab] = useState("output");
 
@@ -148,6 +153,7 @@ function App() {
     setToken(null);
   };
 
+  // 1. Fetch Problems
   useEffect(() => {
     const fetchProblems = async () => {
       try {
@@ -166,6 +172,7 @@ function App() {
     fetchProblems();
   }, [token]);
 
+  // 2. Fetch User History
   useEffect(() => {
     if (selectedProblem && activeTab === "history") {
       const fetchHistory = async () => {
@@ -183,6 +190,21 @@ function App() {
       fetchHistory();
     }
   }, [selectedProblem, activeTab, token]);
+
+  // 3. NEW: Fetch Leaderboard when tab is clicked
+  useEffect(() => {
+    if (activeTab === "leaderboard") {
+      const fetchLeaderboard = async () => {
+        try {
+          const { data } = await axios.get("http://localhost:5000/leaderboard");
+          setLeaderboard(data);
+        } catch (err) {
+          console.error("Failed to fetch leaderboard:", err);
+        }
+      };
+      fetchLeaderboard();
+    }
+  }, [activeTab]);
 
   const runTestCase = async (testCase) => {
     try {
@@ -253,7 +275,6 @@ function App() {
     }
   };
 
-  // RENDER GUARD: Dark background ensures invisibility issues are gone
   if (!selectedProblem) {
     return (
       <div className="h-screen bg-[#1e1e1e] text-white flex flex-col items-center justify-center font-mono">
@@ -277,14 +298,14 @@ function App() {
           <button
             onClick={executeCode}
             disabled={isRunning}
-            className="flex items-center gap-2 px-4 py-1.5 rounded text-sm font-semibold bg-gray-700 hover:bg-gray-600 text-white"
+            className="flex items-center gap-2 px-4 py-1.5 rounded text-sm font-semibold bg-[#333333] hover:bg-[#444444] text-white border border-[#454545]"
           >
-            <Play size={14} /> Run
+            <Play size={14} className="text-green-500" /> Run
           </button>
           <button
             onClick={handleSubmit}
             disabled={isRunning}
-            className="flex items-center gap-2 px-4 py-1.5 rounded text-sm font-semibold bg-green-700 hover:bg-green-600 text-white"
+            className="flex items-center gap-2 px-4 py-1.5 rounded text-sm font-semibold bg-[#007acc] hover:bg-[#118ad4] text-white"
           >
             <Save size={14} /> Submit
           </button>
@@ -326,11 +347,11 @@ function App() {
               {selectedProblem.title}
             </h1>
             <div className="flex gap-2 mb-4">
-              <span className="text-xs px-2 py-1 rounded bg-gray-700 text-green-400 border border-gray-600">
+              <span className="text-xs px-2 py-1 rounded bg-[#333333] text-green-400 border border-[#454545] uppercase tracking-wider">
                 {selectedProblem.difficulty}
               </span>
             </div>
-            <p className="text-gray-300 leading-relaxed mb-4">
+            <p className="text-sm text-gray-300 leading-relaxed mb-4">
               {selectedProblem.description}
             </p>
           </div>
@@ -340,7 +361,7 @@ function App() {
         <div className="w-2/3 flex flex-col">
           <div className="flex-1 flex flex-col min-h-0 bg-[#1e1e1e]">
             <textarea
-              className="flex-1 bg-[#1e1e1e] p-4 font-mono text-sm text-gray-300 outline-none resize-none leading-relaxed"
+              className="flex-1 bg-[#1e1e1e] p-4 font-mono text-sm text-[#d4d4d4] outline-none resize-none leading-relaxed"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="// Write your C++ solution here..."
@@ -352,21 +373,29 @@ function App() {
             <div className="h-9 bg-[#252526] border-b border-[#3e3e42] flex items-center px-2 gap-2">
               <button
                 onClick={() => setActiveTab("output")}
-                className={`text-xs px-3 py-1 flex items-center gap-2 uppercase tracking-wide font-semibold ${activeTab === "output" ? "text-white border-b-2 border-blue-500" : "text-gray-500"}`}
+                className={`text-xs px-3 py-1 flex items-center gap-2 uppercase tracking-wide font-semibold ${activeTab === "output" ? "text-white border-b-2 border-[#007acc]" : "text-gray-500"}`}
               >
                 <Terminal size={12} /> Output
               </button>
               <button
                 onClick={() => setActiveTab("history")}
-                className={`text-xs px-3 py-1 flex items-center gap-2 uppercase tracking-wide font-semibold ${activeTab === "history" ? "text-white border-b-2 border-blue-500" : "text-gray-500"}`}
+                className={`text-xs px-3 py-1 flex items-center gap-2 uppercase tracking-wide font-semibold ${activeTab === "history" ? "text-white border-b-2 border-[#007acc]" : "text-gray-500"}`}
               >
                 <History size={12} /> Submissions
+              </button>
+              {/* NEW LEADERBOARD TAB */}
+              <button
+                onClick={() => setActiveTab("leaderboard")}
+                className={`text-xs px-3 py-1 flex items-center gap-2 uppercase tracking-wide font-semibold ${activeTab === "leaderboard" ? "text-white border-b-2 border-yellow-500" : "text-gray-500"}`}
+              >
+                <Trophy size={12} /> Leaderboard
               </button>
             </div>
 
             <div className="flex-1 p-4 overflow-y-auto font-mono text-sm text-[#cccccc]">
-              {activeTab === "output" ? (
-                testResults.length === 0 ? (
+              {/* TAB CONTENT: OUTPUT */}
+              {activeTab === "output" &&
+                (testResults.length === 0 ? (
                   <div className="text-gray-600 opacity-50 italic">
                     Run code to see output...
                   </div>
@@ -392,35 +421,77 @@ function App() {
                       </span>
                     </div>
                   ))
-                )
-              ) : submissions.length === 0 ? (
-                <div className="text-gray-600 opacity-50 italic">
-                  No submissions yet.
-                </div>
-              ) : (
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="text-gray-500 border-b border-[#3e3e42]">
-                      <th className="pb-2 uppercase">Verdict</th>
-                      <th className="pb-2 uppercase">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {submissions.map((sub, i) => (
-                      <tr key={i} className="border-b border-[#2d2d2d]">
-                        <td
-                          className={`py-2 font-bold ${sub.verdict === "Accepted" ? "text-green-500" : "text-red-500"}`}
-                        >
-                          {sub.verdict}
-                        </td>
-                        <td className="py-2 text-gray-400">
-                          {new Date(sub.submittedAt).toLocaleString()}
-                        </td>
+                ))}
+
+              {/* TAB CONTENT: HISTORY */}
+              {activeTab === "history" &&
+                (submissions.length === 0 ? (
+                  <div className="text-gray-600 opacity-50 italic">
+                    No submissions yet.
+                  </div>
+                ) : (
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-gray-500 border-b border-[#3e3e42]">
+                        <th className="pb-2 uppercase">Verdict</th>
+                        <th className="pb-2 uppercase">Date</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                    </thead>
+                    <tbody>
+                      {submissions.map((sub, i) => (
+                        <tr key={i} className="border-b border-[#2d2d2d]">
+                          <td
+                            className={`py-2 font-bold ${sub.verdict === "Accepted" ? "text-green-500" : "text-red-500"}`}
+                          >
+                            {sub.verdict}
+                          </td>
+                          <td className="py-2 text-gray-400">
+                            {new Date(sub.submittedAt).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ))}
+
+              {/* TAB CONTENT: LEADERBOARD */}
+              {activeTab === "leaderboard" &&
+                (leaderboard.length === 0 ? (
+                  <div className="text-gray-600 opacity-50 italic">
+                    Loading Leaderboard...
+                  </div>
+                ) : (
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-gray-500 border-b border-[#3e3e42]">
+                        <th className="pb-2 uppercase w-16">Rank</th>
+                        <th className="pb-2 uppercase">User</th>
+                        <th className="pb-2 uppercase text-right pr-4">
+                          Problems Solved
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaderboard.map((user, i) => (
+                        <tr
+                          key={i}
+                          className="border-b border-[#2d2d2d] hover:bg-[#252526] transition-colors"
+                        >
+                          <td className="py-2 font-bold text-[#007acc]">
+                            #{i + 1}
+                          </td>
+                          <td className="py-2 flex items-center gap-2">
+                            <User size={12} className="text-gray-500" />
+                            {user.username}
+                          </td>
+                          <td className="py-2 text-green-500 font-bold text-right pr-4">
+                            {user.totalSolved}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ))}
             </div>
           </div>
         </div>

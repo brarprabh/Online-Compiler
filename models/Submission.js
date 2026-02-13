@@ -1,9 +1,14 @@
 const mongoose = require('mongoose');
 
 const SubmissionSchema = new mongoose.Schema({
+    // 👇 WE MUST ADD THIS LINE 👇
+    userId: { 
+        type: String, 
+        required: true 
+    },
+    // -------------------------
     problemId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Problem', // Links this submission to a specific Problem
+        type: String,
         required: true
     },
     code: {
@@ -12,16 +17,16 @@ const SubmissionSchema = new mongoose.Schema({
     },
     language: {
         type: String,
-        default: "cpp"
+        default: 'cpp'
     },
     verdict: {
-        type: String, // "Accepted", "Wrong Answer", "Error"
+        type: String,
         required: true
     },
     submittedAt: {
         type: Date,
-        default: Date.now // Auto-fills the current time
+        default: Date.now
     }
 });
 
-module.exports = mongoose.model("Submission", SubmissionSchema);
+module.exports = mongoose.model('Submission', SubmissionSchema);

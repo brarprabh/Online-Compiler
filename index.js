@@ -33,6 +33,29 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cors());
 
+// --- AUTHENTICATION MIDDLEWARE (THE BOUNCER) ---
+const verifyToken = (req, res, next) => {
+    // 1. Check if the frontend sent the token in the headers
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "Access denied. No token provided." });
+    }
+
+    // 2. Extract the token
+    const token = authHeader.split(" ")[1];
+
+    try {
+        // 3. Verify the token using your secret key
+        const verified = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // 4. Attach the user's ID to the request so the next function can use it
+        req.user = verified; 
+        next(); // Let them pass
+    } catch (err) {
+        res.status(400).json({ error: "Invalid token" });
+    }
+};
+
 // GET Route to fetch all problems
 app.get('/problems', async (req, res) => {
     try {
@@ -94,50 +117,41 @@ app.post("/run", async (req, res) => {
     }
 });
 
-app.post('/submit', async (req, res) => {
+// SECURE SUBMIT ROUTE (Notice we added 'verifyToken' in the middle)
+app.post('/submit', verifyToken, async (req, res) => {
     try {
-        const { problemId, code, language } = req.body;
+        const { problemId, code, language, verdict } = req.body;
 
-        // 1. Find the problem to get its test cases
-        const problem = await Problem.findById(problemId);
-        if (!problem) return res.status(404).json({ error: "Problem not found" });
-
-        // 2. Run the code against ALL test cases
-        // (For simplicity, we are re-using the logic. In a real app, you'd abstract this into a function)
-        let verdict = "Accepted";
-        
-        // We need to loop through test cases to verify
-        // Note: Ideally, you import the 'executeCpp' function logic here to run it internally.
-        // For now, let's assume the Frontend sends the "verdict" or we just save the attempt.
-        // BETTER APPROACH FOR NOW: Just save what the frontend sends 
-        // (We will make this secure in the next "Security" phase).
-        
-        const submission = new Submission({
+        const newSubmission = new Submission({
+            userId: req.user.id,     // <--- THIS IS THE MAGIC LINE WE WERE MISSING!
             problemId,
             code,
             language,
-            verdict: req.body.verdict // The frontend will tell us if it passed or failed for now
+            verdict
         });
 
-        await submission.save(); // Save to MongoDB
-
-        res.json({ message: "Submission Saved", submission });
-
+        await newSubmission.save();
+        res.status(201).json({ message: "Submission saved successfully!" });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// GET Route: Fetch submissions for a specific problem
-app.get('/submissions/:problemId', async (req, res) => {
-  try {
-    const { problemId } = req.params;
-    // Find submissions -> Sort by newest first (-1)
-    const submissions = await Submission.find({ problemId }).sort({ submittedAt: -1 });
-    res.json(submissions);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+// SECURE HISTORY ROUTE (Only get history for the logged-in user)
+app.get('/submissions/:id', verifyToken, async (req, res) => {
+    try {
+        const problemId = req.params.id;
+        
+        // Find submissions that match BOTH the problem AND the user
+        const history = await Submission.find({ 
+            problemId: problemId,
+            userId: req.user.id      // <--- Only show MY history!
+        }).sort({ submittedAt: -1 });
+
+        res.json(history);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // REGISTER ROUTE
@@ -205,6 +219,82 @@ app.post('/login', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// GET GLOBAL LEADERBOARD (Bulletproof Version)
+app.get('/leaderboard', async (req, res) => {
+    try {
+        const leaderboard = await Submission.aggregate([
+            // 1. Only count successful solutions
+            { $match: { verdict: "Accepted" } },
+            
+            // 2. Group by User and count unique problems
+            {
+                $group: {
+                    _id: "$userId",
+                    solvedCount: { $addToSet: "$problemId" } 
+                }
+            },
+            
+            // 3. Convert that set of problems into a number
+            {
+                $project: {
+                    userId: "$_id",
+                    totalSolved: { $size: "$solvedCount" }
+                }
+            },
+
+            // 4. FIX: Safely convert userId string to ObjectId (just in case)
+            {
+                $addFields: {
+                    userIdObj: { $toObjectId: "$userId" }
+                }
+            },
+
+            // 5. Join with the Users collection
+            {
+                $lookup: {
+                    from: "users",           
+                    localField: "userIdObj", // Use the converted ID
+                    foreignField: "_id",     
+                    as: "userDetails"        
+                }
+            },
+
+            // 6. FIX: Use preserveNullAndEmptyArrays so data doesn't vanish if lookup fails
+            { 
+                $unwind: {
+                    path: "$userDetails",
+                    preserveNullAndEmptyArrays: true 
+                }
+            },
+
+            // 7. Sort by highest solved count
+            { $sort: { totalSolved: -1 } },
+
+            // 8. Limit to Top 10
+            { $limit: 10 },
+
+            // 9. Clean up the output
+            {
+                $project: {
+                    _id: 0,
+                    // FIX: If username is missing, show "Unknown User" instead of blank
+                    username: { $ifNull: ["$userDetails.username", "Unknown User"] },
+                    totalSolved: 1
+                }
+            }
+        ]);
+
+        console.log("DEBUG Leaderboard Data:", leaderboard); // <--- This will print to your terminal!
+        res.json(leaderboard);
+
+    } catch (err) {
+        console.error("Leaderboard Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 
 // 3. Start the Server
 app.listen(5000, () => {
