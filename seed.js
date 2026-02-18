@@ -35,7 +35,34 @@ const problems = [
             { input: "5 10", output: "-5" },
             { input: "0 0", output: "0" }
         ]
-    }
+    },
+    {
+    title: "Reverse Linked List",
+    description: "Given the head of a singly linked list, reverse the list and return it.",
+    difficulty: "Easy",
+    tags: ["Linked List"], // <--- This must match your React filter
+    testCases: [
+      { input: "[1,2,3,4,5]", output: "[5,4,3,2,1]" }
+    ]
+  },
+  {
+    title: "Valid Parentheses",
+    description: "Given a string containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.",
+    difficulty: "Easy",
+    tags: ["Stack", "String"],
+    testCases: [
+      { input: "()[]{}", output: "true" }
+    ]
+  },
+  {
+    title: "Binary Search",
+    description: "Given an array of integers nums which is sorted in ascending order, and an integer target, search target in nums.",
+    difficulty: "Easy",
+    tags: ["Binary Search", "Array"],
+    testCases: [
+      { input: "[-1,0,3,5,9,12], 9", output: "4" }
+    ]
+  }
 ];
 
 const seedDB = async () => {

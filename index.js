@@ -23,7 +23,9 @@ const connectDB = require("./database"); // Import connection logic
 const Problem = require("./models/problem"); // Import the Model
 const Submission = require('./models/Submission');
 
-connectDB();
+connectDB().then(() => {
+     initializeTags(); // <--- Uncomment this line, save, and run your server ONCE.
+});
 
 
 // 1. Middleware
@@ -59,7 +61,7 @@ const verifyToken = (req, res, next) => {
 // GET Route to fetch all problems
 app.get('/problems', async (req, res) => {
     try {
-        // Fetch all problems from Mongo, but only return title, difficulty, and id
+        // This line fetches the problems
         const problems = await Problem.find(); 
         res.json(problems);
     } catch (err) {
@@ -294,8 +296,51 @@ app.get('/leaderboard', async (req, res) => {
     }
 });
 
+// GET USER PROFILE DATA
+app.get('/profile', verifyToken, async (req, res) => {
+    try {
+        // 1. Get User Basic Info (excluding password)
+        const user = await User.findById(req.user.id).select('-password');
+        
+        // 2. Get All Unique Problems Solved by this user
+        const solvedProblems = await Submission.distinct('problemId', { 
+            userId: req.user.id, 
+            verdict: "Accepted" 
+        });
 
+        // 3. Get Total Attempt Count
+        const totalAttempts = await Submission.countDocuments({ userId: req.user.id });
 
+        res.json({
+            username: user.username,
+            email: user.email,
+            solvedCount: solvedProblems.length,
+            totalAttempts: totalAttempts,
+            solvedProblems: solvedProblems // Array of IDs
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// This function will add tags to your existing database entries
+const initializeTags = async () => {
+  try {
+    const updates = [
+      { title: "Two Sum", tags: ["Array", "Hash Table", "Easy"] },
+      { title: "Reverse Linked List", tags: ["Linked List", "Easy"] },
+      { title: "Binary Search", tags: ["Array", "Binary Search", "Easy"] }
+    ];
+
+    for (let item of updates) {
+      // It looks for the title and adds the tags array to it
+      await Problem.updateOne({ title: item.title }, { $set: { tags: item.tags } });
+    }
+    console.log("✅ Existing problems tagged successfully!");
+  } catch (err) {
+    console.error("Error tagging problems:", err);
+  }
+};
 // 3. Start the Server
 app.listen(5000, () => {
     console.log('Listening on port 5000!');
