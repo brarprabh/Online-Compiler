@@ -127,6 +127,7 @@ function App() {
     setTestResults([]);
     setActiveTab("output");
     const results = [];
+
     for (const testCase of selectedProblem.testCases) {
       try {
         const { data } = await axios.post("http://localhost:5000/run", {
@@ -135,11 +136,21 @@ function App() {
           input: testCase.input,
           expectedOutput: testCase.output,
         });
+        // If successful, push the verdict (Accepted/Wrong Answer)
         results.push({ verdict: data.verdict });
       } catch (err) {
-        results.push({ verdict: "Error" });
+        // 🟢 HANDLE THE TLE VERDICT FROM BACKEND
+        const serverVerdict = err.response?.data?.verdict;
+
+        if (serverVerdict === "TLE") {
+          results.push({ verdict: "TLE" });
+        } else {
+          // Handle Syntax Errors or other Runtime Errors
+          results.push({ verdict: "Runtime Error" });
+        }
       }
     }
+
     setTestResults(results);
     setIsRunning(false);
     return results;

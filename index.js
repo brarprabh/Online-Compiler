@@ -83,7 +83,6 @@ app.get('/problems/:id', async (req, res) => {
 // 2. The Main Route
 // Endpoint: POST /run
 app.post("/run", async (req, res) => {
-    // 1. Extract 'expectedOutput' from the request
     const { language = "cpp", code, input, expectedOutput } = req.body;
 
     if (!code) {
@@ -100,22 +99,34 @@ app.post("/run", async (req, res) => {
         // 3. The Judge Logic (Verdict)
         let verdict = null;
         if (expectedOutput) {
-            // "Normalize" the strings: Remove extra spaces and newlines
             const cleanOutput = output.trim().replace(/\r\n/g, "\n"); 
             const cleanExpected = expectedOutput.trim().replace(/\r\n/g, "\n");
 
             if (cleanOutput === cleanExpected) {
-                verdict = "Accepted"; // ✅
+                verdict = "Accepted"; 
             } else {
-                verdict = "Wrong Answer"; // ❌
+                verdict = "Wrong Answer"; 
             }
         }
 
-        // 4. Return Output + Verdict
         res.json({ output, verdict });
 
     } catch (err) {
-        res.status(500).json({ err });
+        // 🟢 CATCH TLE ERROR SPECIFICALLY
+        if (err === "Time Limit Exceeded (TLE)") {
+            return res.status(408).json({ 
+                success: false, 
+                error: "Time Limit Exceeded", 
+                verdict: "TLE" 
+            });
+        }
+
+        // Generic Error (Syntax error, Docker error, etc.)
+        res.status(500).json({ 
+            success: false, 
+            error: err.message || err, 
+            verdict: "Runtime Error" 
+        });
     }
 });
 
